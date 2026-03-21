@@ -2,23 +2,38 @@ export interface Env {}
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const RESTRICTED_COUNTRIES = ['US', 'GB', 'CU', 'IR', 'KP', 'SY'];
-    
-    // 🚨 1. Define a secret password only YOU know
+    //const RESTRICTED_COUNTRIES = ['US', 'GB', 'CU', 'IR', 'KP', 'SY'];
+    const RESTRICTED_COUNTRIES = ['GB', 'CU', 'IR', 'KP', 'SY'];
     const SECRET_BYPASS_KEY = "open_sesame_123"; 
 
+    // 🚨 FIX: Here is the missing url definition!
     const url = new URL(request.url);
     const cookieHeader = request.headers.get('Cookie') || '';
 
-    // 🚨 2. Check if the URL contains the secret password (?admin=open_sesame_123)
-    if (url.searchParams.get('admin') === SECRET_BYPASS_KEY) {
-      // Fetch the actual site
-      const response = await fetch(request);
+    // Prevent the local infinite loop AND fix the IPv6 timeout!
+    let targetRequest = request;
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+      const localUrl = new URL(request.url);
+      localUrl.hostname = '127.0.0.1'; // Force IPv4
+      localUrl.port = '3000';
       
-      // Copy the response so we can modify the headers
+      // Clone headers and overwrite the Host so Next.js accepts it
+      const newHeaders = new Headers(request.headers);
+      newHeaders.set('Host', '127.0.0.1:3000');
+      
+      targetRequest = new Request(localUrl.toString(), {
+        method: request.method,
+        headers: newHeaders,
+        body: request.body,
+        redirect: request.redirect
+      });
+    }
+
+    // 1. Check for the Secret Password in the URL
+    if (url.searchParams.get('admin') === SECRET_BYPASS_KEY) {
+      const response = await fetch(targetRequest);
       const newResponse = new Response(response.body, response);
       
-      // Drop a cookie in the browser that lasts for 30 days
       newResponse.headers.set(
         'Set-Cookie', 
         `aegis_bypass=${SECRET_BYPASS_KEY}; Path=/; Max-Age=2592000; Secure; HttpOnly; SameSite=Strict`
@@ -27,12 +42,12 @@ export default {
       return newResponse;
     }
 
-    // 🚨 3. Check if the browser already has the bypass cookie
+    // 2. Check if they already have the bypass cookie
     if (cookieHeader.includes(`aegis_bypass=${SECRET_BYPASS_KEY}`)) {
-      return fetch(request); // Let them straight in!
+      return fetch(targetRequest); 
     }
 
-    // 4. Standard Geofence Logic for everyone else
+    // 3. Standard Geofence Logic for everyone else
     const userCountry = request.cf?.country as string | undefined;
 
     if (userCountry && RESTRICTED_COUNTRIES.includes(userCountry)) {
@@ -66,6 +81,7 @@ export default {
       });
     }
 
-    return fetch(request);
+    // 4. Allowed traffic goes to the app
+    return fetch(targetRequest);
   },
 };
