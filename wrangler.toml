@@ -1,0 +1,5 @@
+# wrangler.toml
+name = "aegis-cloudflare"
+main = "src/index.js"
+compatibility_date = "2026-03-15"
+image = "./Dockerfile" # Path to your local Dockerfile
