@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: geofence-config
+data:
+  ALLOW_US_DEVELOPMENT: "true" # Set to "false" in production
+  
